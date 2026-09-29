@@ -1,273 +1,195 @@
-products = [
-    {"id": 1, "name": "Ноутбук Lenovo", "price": 24999.99, "quantity": 5},
-    {"id": 2, "name": "Смартфон Samsung", "price": 15999.50, "quantity": 8},
-    {"id": 3, "name": "Навушники JBL", "price": 1299.00, "quantity": 20},
-    {"id": 4, "name": "Клавіатура Logitech", "price": 899.90, "quantity": 15},
-    {"id": 5, "name": "Монітор Dell 24", "price": 6499.00, "quantity": 6},
-]
-
-cart = {}
+ADMIN_LOGIN = "admin"
+ADMIN_PASSWORD = "1234"
 
 
 def format_price(price):
-    return f"{price:.2f} грн"
+    """Ціна у форматі ххх.ххгрн"""
+    return f"{price:.2f}грн"
 
 
-def find_product(product_id):
-    for p in products:
-        if p["id"] == product_id:
-            return p
-    return None
+class Product:
+    def __init__(self, name, price, count):
+        self.name = name
+        self.price = price
+        self.count = count
 
 
-def get_next_id():
-    return max((p["id"] for p in products), default=0) + 1
+class Cart:
+    """Кошик: зберігає {товар: кількість}, без дублікатів."""
+
+    def __init__(self):
+        self._items = {}
+
+    def add(self, product, qty=1):
+        self._items[product] = self._items.get(product, 0) + qty
+
+    def remove(self, product):
+        self._items.pop(product, None)
+
+    def quantity_of(self, product):
+        return self._items.get(product, 0)
+
+    def is_empty(self):
+        return not self._items
+
+    def items(self):
+        return list(self._items.items())
+
+    def total(self):
+        return sum(map(lambda item: item[0].price * item[1], self._items.items()))
+
+    def clear(self):
+        self._items.clear()
+
+
+class Shop:
+    """Уся логіка магазину, без input/print."""
+
+    def __init__(self):
+        self.products = [
+            Product("Хліб", 25.50, 10),
+            Product("Молоко", 40.00, 8),
+            Product("Шоколад", 50.00, 5),
+            Product("Кава", 100.00, 6),
+            Product("Печиво", 35.50, 10),
+        ]
+        self.cart = Cart()
+
+    def available(self, product):
+        return product.count - self.cart.quantity_of(product)
+
+    def add_to_cart(self, number, qty):
+        if not 1 <= number <= len(self.products):
+            return "Неправильний номер товару"
+        if qty < 1:
+            return "Кількість має бути більшою за 0"
+        product = self.products[number - 1]
+        if qty > self.available(product):
+            return f"Недостатньо товару. Доступно: {self.available(product)}"
+        self.cart.add(product, qty)
+        return f"Додано: {product.name} x{qty}"
+
+    def remove_from_cart(self, position):
+        items = self.cart.items()
+        if not 1 <= position <= len(items):
+            return "Неправильний номер"
+        product = items[position - 1][0]
+        self.cart.remove(product)
+        return f"Видалено: {product.name}"
+
+    def checkout(self):
+        total = self.cart.total()
+        for product, qty in self.cart.items():
+            product.count -= qty
+        self.cart.clear()
+        return total
+
+    def stock_report(self):
+        return sorted(self.products, key=lambda p: p.count)
+
+
+def check_admin(login, password):
+    return login == ADMIN_LOGIN and password == ADMIN_PASSWORD
 
 
 def read_int(prompt):
-    value = input(prompt).strip()
-    if value.isdecimal():
-        return int(value)
-    print("Потрібно ввести ціле невід'ємне число.")
-    return None
-
-
-def read_float(prompt):
-    value = input(prompt).strip().replace(",", ".")
     try:
-        number = float(value)
+        return int(input(prompt).strip())
     except ValueError:
-        print("Потрібно ввести число (наприклад 199.99).")
+        print("Введіть ціле число")
         return None
-    if 0 <= number < float("inf"):
-        return number
-    print("Число має бути невід'ємним і скінченним.")
-    return None
 
 
-def ask_new_price(current_price):
-    value = input("Нова ціна (Enter - без змін): ").strip().replace(",", ".")
-    if value == "":
-        return current_price
-    try:
-        new_price = float(value)
-        if 0 <= new_price < float("inf"):
-            return new_price
-    except ValueError:
-        pass
-    print("Некоректна ціна, залишено стару.")
-    return current_price
+def show_catalog(shop):
+    print("\n--- КАТАЛОГ ---")
+    for i, p in enumerate(shop.products, start=1):
+        print(f"{i}. {p.name} - {format_price(p.price)} (доступно: {shop.available(p)})")
 
 
-def ask_new_quantity(current_quantity):
-    value = input("Нова кількість (Enter - без змін): ").strip()
-    if value == "":
-        return current_quantity
-    if value.isdecimal():
-        return int(value)
-    print("Некоректна кількість, залишено стару.")
-    return current_quantity
-
-
-def print_menu(title, lines):
-    print(f"\n--- {title} ---")
-    for line in lines:
-        print(line)
-
-
-def show_products(show_quantity=False):
-    title = "ЗАЛИШКИ ТОВАРІВ (АДМІН)" if show_quantity else "КАТАЛОГ ТОВАРІВ"
-    print(f"\n===== {title} =====")
-    for p in products:
-        if show_quantity:
-            print(f"[{p['id']}] {p['name']}: {p['quantity']} шт. (ціна: {format_price(p['price'])})")
-        else:
-            print(f"[{p['id']}] {p['name']} - {format_price(p['price'])}")
-    print("=" * (len(title) + 12))
-
-
-def get_cart_total():
-    return sum(find_product(pid)["price"] * qty for pid, qty in cart.items())
-
-
-def add_to_cart(product_id, qty):
-    product = find_product(product_id)
-    if product is None:
-        print("Товар з таким ID не знайдено.")
+def show_cart(shop):
+    print("\n--- КОШИК ---")
+    if shop.cart.is_empty():
+        print("Кошик порожній")
         return
-    already = cart.get(product_id, 0)
-    if already + qty > product["quantity"]:
-        print(f"На складі недостатньо товару {product['name']}.")
+    for i, (p, qty) in enumerate(shop.cart.items(), start=1):
+        print(f"{i}. {p.name} x{qty} = {format_price(p.price * qty)}")
+    print("Всього:", format_price(shop.cart.total()))
+
+
+def add_flow(shop):
+    show_catalog(shop)
+    number = read_int("Номер товару: ")
+    if number is None:
         return
-    cart[product_id] = already + qty
-    print(f"Додано: {product['name']} x{qty}")
+    qty = read_int("Кількість: ")
+    if qty is None:
+        return
+    print(shop.add_to_cart(number, qty))
 
 
-def remove_from_cart(product_id):
-    if product_id in cart:
-        del cart[product_id]
-        print("Товар видалено з кошика.")
+def delete_flow(shop):
+    show_cart(shop)
+    if shop.cart.is_empty():
+        return
+    position = read_int("Який товар видалити? ")
+    if position is not None:
+        print(shop.remove_from_cart(position))
+
+
+def buy_flow(shop):
+    if shop.cart.is_empty():
+        print("Кошик порожній")
+        return
+    show_cart(shop)
+    answer = input("Купити? (так/ні): ").strip().lower()
+    if answer == "так":
+        total = shop.checkout()
+        print(f"Покупка успішна! Сплачено: {format_price(total)}")
     else:
-        print("Такого товару немає в кошику.")
+        print("Покупку скасовано")
 
 
-def show_cart():
-    if not cart:
-        print("\nКошик порожній.")
-        return
-    print("\n===== ВАШ КОШИК =====")
-    for pid, qty in cart.items():
-        product = find_product(pid)
-        print(f"{product['name']} x{qty} = {format_price(product['price'] * qty)}")
-    print(f"Разом: {format_price(get_cart_total())}")
-    print("=====================")
-
-
-def checkout():
-    if not cart:
-        print("Кошик порожній, нічого купувати.")
-        return
-    for pid, qty in cart.items():
-        product = find_product(pid)
-        if qty > product["quantity"]:
-            print(f"Недостатньо товару {product['name']} для покупки.")
-            return
-    total = get_cart_total()
-    for pid, qty in cart.items():
-        find_product(pid)["quantity"] -= qty
-    print(f"\nПокупку оформлено! Сплачено: {format_price(total)}")
-    cart.clear()
-
-
-def add_product():
-    print("\n--- Додавання нового товару ---")
-    name = input("Назва товару: ").strip()
-    if name == "":
-        print("Назва не може бути порожньою.")
-        return
-    price = read_float("Ціна: ")
-    if price is None:
-        return
-    quantity = read_int("Кількість на складі: ")
-    if quantity is None:
-        return
-    products.append({"id": get_next_id(), "name": name, "price": price, "quantity": quantity})
-    print(f"Товар «{name}» додано з ID {products[-1]['id']}.")
-
-
-def edit_product():
-    pid = read_int("ID товару для редагування: ")
-    if pid is None:
-        return
-    product = find_product(pid)
-    if product is None:
-        print("Товар з таким ID не знайдено.")
-        return
-    print(f"Поточні дані: {product['name']}, {format_price(product['price'])}, "
-          f"залишок {product['quantity']} шт.")
-    new_name = input("Нова назва (Enter - без змін): ").strip()
-    if new_name != "":
-        product["name"] = new_name
-    product["price"] = ask_new_price(product["price"])
-    product["quantity"] = ask_new_quantity(product["quantity"])
-    print("Товар оновлено.")
-
-
-def delete_product():
-    pid = read_int("ID товару для видалення: ")
-    if pid is None:
-        return
-    product = find_product(pid)
-    if product is None:
-        print("Товар з таким ID не знайдено.")
-        return
-    if input(f"Точно видалити «{product['name']}»? (так/ні): ").strip().lower() != "так":
-        print("Видалення скасовано.")
-        return
-    products.remove(product)
-    cart.pop(pid, None)
-    print("Товар видалено з каталогу.")
-
-
-def admin_login():
-    login = input("Логін адміністратора: ")
+def admin_flow(shop):
+    login = input("Логін: ")
     password = input("Пароль: ")
-    if login != "admin" or password != "1234":
-        print("Невірний логін або пароль.")
+    if not check_admin(login, password):
+        print("Неправильний логін або пароль")
         return
-
-    print("\nВітаємо, адміністраторе!")
-    while True:
-        print_menu("Адмін-меню", [
-            "1. Переглянути залишки товарів",
-            "2. Переглянути каталог",
-            "3. Додати товар",
-            "4. Редагувати товар",
-            "5. Видалити товар",
-            "0. Вийти з адмін-панелі",
-        ])
-        choice = input("Ваш вибір: ").strip()
-        if choice == "1":
-            show_products(show_quantity=True)
-        elif choice == "2":
-            show_products()
-        elif choice == "3":
-            add_product()
-        elif choice == "4":
-            edit_product()
-        elif choice == "5":
-            delete_product()
-        elif choice == "0":
-            print("Вихід з адмін-панелі.")
-            break
-        else:
-            print("Немає такого пункту меню.")
+    print("\n--- ЗАЛИШКИ ---")
+    for p in shop.stock_report():
+        print(f"{p.name} - {p.count} шт.")
 
 
 def main():
-    name = input("Введіть ваше ім'я: ").strip() or "Гість"
-    print(f"\nЛаскаво просимо до міні-магазину, {name}!")
+    shop = Shop()
+    actions = {
+        "1": show_catalog,
+        "2": add_flow,
+        "3": show_cart,
+        "4": delete_flow,
+        "5": buy_flow,
+        "6": admin_flow,
+    }
 
     while True:
-        print_menu("Меню магазину", [
-            "1. Переглянути каталог товарів",
-            "2. Додати товар в кошик",
-            "3. Видалити товар з кошика",
-            "4. Переглянути кошик",
-            "5. Оформити покупку",
-            "6. Увійти як адміністратор",
-            "0. Вийти",
-        ])
-        choice = input("Ваш вибір: ").strip()
+        print("\n--- МІНІ МАГАЗИН ---")
+        print("1 - Каталог")
+        print("2 - Додати в кошик")
+        print("3 - Кошик")
+        print("4 - Видалити з кошика")
+        print("5 - Купити")
+        print("6 - Адміністратор")
+        print("0 - Вихід")
 
-        if choice == "1":
-            show_products()
-        elif choice == "2":
-            pid = read_int("ID товару: ")
-            if pid is None:
-                continue
-            qty = read_int("Кількість: ")
-            if qty is None:
-                continue
-            if qty == 0:
-                print("Кількість має бути більшою за 0.")
-                continue
-            add_to_cart(pid, qty)
-        elif choice == "3":
-            pid = read_int("ID товару для видалення з кошика: ")
-            if pid is not None:
-                remove_from_cart(pid)
-        elif choice == "4":
-            show_cart()
-        elif choice == "5":
-            checkout()
-        elif choice == "6":
-            admin_login()
-        elif choice == "0":
-            print("До побачення!")
+        choice = input("Виберіть дію: ").strip()
+        if choice == "0":
+            print("Вихід...")
             break
+        action = actions.get(choice)
+        if action:
+            action(shop)
         else:
-            print("Немає такого пункту меню.")
+            print("Такого пункту немає")
 
 
 if __name__ == "__main__":
